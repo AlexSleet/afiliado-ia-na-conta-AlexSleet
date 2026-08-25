@@ -1,0 +1,15 @@
+
+{% extends "layout.html" %}{% block content %}
+<h1>Painel de desempenho</h1>
+<div class="grid">
+<div class="card"><div class="muted">Produtos</div><div class="kpi">{{products}}</div></div>
+<div class="card"><div class="muted">Leads</div><div class="kpi">{{leads}}</div></div>
+<div class="card"><div class="muted">Cliques</div><div class="kpi">{{clicks}}</div></div>
+<div class="card"><div class="muted">Vendas</div><div class="kpi">{{sales}}</div></div>
+<div class="card"><div class="muted">Comissões</div><div class="kpi">R$ {{'%.2f'|format(commission)}}</div></div>
+</div><div class="sp"></div>
+<div class="card"><h2>Produtos com melhor desempenho</h2>
+<table><tr><th>Produto</th><th>Cliques</th><th>Vendas</th></tr>
+{% for x in best %}<tr><td>{{x.name}}</td><td>{{x.clicks}}</td><td>{{x.sales}}</td></tr>{% else %}<tr><td colspan="3">Cadastre seu primeiro produto.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

@@ -1,0 +1,11 @@
+
+{% extends "layout.html" %}{% block content %}<h1>Assistente de criativos</h1>
+<div class="card"><p class="muted">Gere uma base de copy para pré-venda. O modo atual funciona sem API externa.</p>
+<select id="p"><option value="">Selecione o produto</option>{% for p in products %}<option data-name="{{p.name}}" data-niche="{{p.niche}}">{{p.name}}</option>{% endfor %}</select>
+<div class="sp"></div><button class="btn" onclick="gen()">Gerar copy</button><div class="sp"></div>
+<textarea id="out" rows="10" placeholder="A copy aparecerá aqui"></textarea></div>
+<script>
+async function gen(){let s=document.getElementById('p'),o=s.options[s.selectedIndex]; if(!o||!o.dataset.name)return;
+let r=await fetch('/api/ai-copy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:o.dataset.name,niche:o.dataset.niche})});
+let d=await r.json();document.getElementById('out').value=d.headline+"\n\n"+d.body+"\n\nCTA: "+d.cta+"\n\n"+d.note;}
+</script>{% endblock %}

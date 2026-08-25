@@ -1,0 +1,10 @@
+
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Entrar • Afiliado IA</title><link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}"></head>
+<body><main class="wrap" style="max-width:520px;padding-top:10vh">
+<div class="card"><div class="brand" style="font-size:24px">⚡ Afiliado IA</div><h1>Acesso administrativo</h1>
+{% with messages = get_flashed_messages() %}{% if messages %}<p style="color:#ff9c9c">{{messages[0]}}</p>{% endif %}{% endwith %}
+<form method="post"><label>Usuário</label><input name="username" autocomplete="username" required>
+<label>Senha</label><input name="password" type="password" autocomplete="current-password" required>
+<div class="sp"></div><button class="btn" style="width:100%">Entrar</button></form>
+<p class="small muted">Defina ADMIN_USER e ADMIN_PASSWORD nas variáveis de ambiente do servidor.</p></div></main></body></html>

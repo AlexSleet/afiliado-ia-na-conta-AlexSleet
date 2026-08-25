@@ -1,0 +1,7 @@
+
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Afiliado IA</title><link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}"></head>
+<body>
+<nav class="nav"><div class="brand">⚡ Afiliado IA</div>
+<a href="/">Dashboard</a><a href="/products">Produtos</a><a href="/leads">Leads</a><a href="/sales">Vendas</a><a href="/ai">IA</a><a href="/settings">Integrações</a><form method="post" action="/logout" style="margin:0"><button class="btn secondary" type="submit">Sair</button></form></nav>
+<main class="wrap">{% block content %}{% endblock %}</main></body></html>

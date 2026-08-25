@@ -1,0 +1,8 @@
+
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}"><title>{{p.name}}</title></head>
+<body><main class="wrap hero"><span class="pill">{{p.niche or 'Oferta selecionada'}}</span>
+<h1>{{p.name}}</h1><p class="muted" style="font-size:20px;max-width:760px">Conheça os detalhes da oferta e veja se ela combina com o que você procura. Confira benefícios, condições e informações oficiais antes de comprar.</p>
+<div class="sp"></div><div class="card" style="max-width:620px"><h2>Quero receber os detalhes</h2>
+<form method="post" action="/lead/{{p.id}}"><input name="name" placeholder="Seu nome"><input name="email" type="email" placeholder="Seu e-mail"><input name="whatsapp" placeholder="WhatsApp"><button class="btn">Continuar para oferta</button></form></div>
+<p class="small muted">Esta página pode conter link de afiliado. O responsável pode receber comissão pela compra, sem custo adicional para você.</p></main></body></html>

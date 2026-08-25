@@ -1,0 +1,15 @@
+
+{% extends "layout.html" %}{% block content %}
+<h1>Produtos afiliados</h1>
+<form class="card" method="post"><div class="row">
+<div><label>Nome</label><input name="name" required placeholder="Ex.: Curso X"></div>
+<div><label>Nicho</label><input name="niche" placeholder="Ex.: produtividade"></div>
+<div><label>Comissão estimada (R$)</label><input type="number" step="0.01" name="commission"></div></div>
+<label>Link de afiliado</label><input type="url" name="affiliate_url" required placeholder="https://...">
+<button class="btn">Cadastrar produto</button></form><div class="sp"></div>
+<table><tr><th>Produto</th><th>Nicho</th><th>Comissão</th><th>Links</th><th></th></tr>
+{% for p in products %}<tr><td>{{p.name}}</td><td>{{p.niche}}</td><td>R$ {{'%.2f'|format(p.commission)}}</td>
+<td><a class="btn secondary" href="/landing/{{p.id}}">Pré-venda</a> <a class="btn secondary" href="/go/{{p.id}}?source=direct">Rastreado</a></td>
+<td><form method="post" action="/products/{{p.id}}/delete"><button class="btn danger">Excluir</button></form></td></tr>
+{% else %}<tr><td colspan="5">Nenhum produto cadastrado.</td></tr>{% endfor %}</table>
+{% endblock %}

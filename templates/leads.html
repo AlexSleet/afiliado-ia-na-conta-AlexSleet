@@ -1,0 +1,5 @@
+
+{% extends "layout.html" %}{% block content %}<h1>Leads</h1>
+<table><tr><th>Data</th><th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>Produto</th><th>Origem</th></tr>
+{% for l in leads %}<tr><td>{{l.created_at}}</td><td>{{l.name}}</td><td>{{l.email}}</td><td>{{l.whatsapp}}</td><td>{{l.product_name}}</td><td>{{l.source}}</td></tr>
+{% else %}<tr><td colspan="6">Nenhum lead.</td></tr>{% endfor %}</table>{% endblock %}
