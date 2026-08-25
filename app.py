@@ -2,10 +2,9 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, s
 import sqlite3
 import os
 import secrets
+import json
 from functools import wraps
-from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-from urllib.parse import urlparse
 
 app = Flask(__name__)
 
@@ -22,6 +21,9 @@ DB = os.getenv(
 
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "troque-esta-senha")
+
+# Token opcional para proteger o webhook
+KIWIFY_WEBHOOK_TOKEN = os.getenv("KIWIFY_WEBHOOK_TOKEN", "")
 
 
 # =========================================================
@@ -74,14 +76,25 @@ def init_db():
         source TEXT,
         created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS webhook_events(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider TEXT NOT NULL,
+        event_id TEXT,
+        event_type TEXT,
+        payload TEXT,
+        created_at TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_webhook_unique_event
+    ON webhook_events(provider, event_id)
+    WHERE event_id IS NOT NULL AND event_id <> '';
     """)
 
     con.commit()
     con.close()
 
 
-# IMPORTANTE:
-# Inicializa o banco também quando o aplicativo é carregado pelo Gunicorn.
 init_db()
 
 
@@ -228,11 +241,7 @@ def products():
     if request.method == "POST":
 
         name = request.form["name"].strip()
-
-        niche = request.form.get(
-            "niche",
-            ""
-        ).strip()
+        niche = request.form.get("niche", "").strip()
 
         try:
             commission = float(
@@ -241,9 +250,7 @@ def products():
         except ValueError:
             commission = 0
 
-        affiliate_url = request.form[
-            "affiliate_url"
-        ].strip()
+        affiliate_url = request.form["affiliate_url"].strip()
 
         con.execute("""
             INSERT INTO products(
@@ -259,9 +266,7 @@ def products():
             niche,
             commission,
             affiliate_url,
-            datetime.now().isoformat(
-                timespec="seconds"
-            )
+            datetime.now().isoformat(timespec="seconds")
         ))
 
         con.commit()
@@ -353,13 +358,8 @@ def add_lead(pid):
         request.form.get("email", ""),
         request.form.get("whatsapp", ""),
         pid,
-        request.form.get(
-            "source",
-            "landing"
-        ),
-        datetime.now().isoformat(
-            timespec="seconds"
-        )
+        request.form.get("source", "landing"),
+        datetime.now().isoformat(timespec="seconds")
     ))
 
     con.commit()
@@ -402,21 +402,14 @@ def leads():
 
 
 # =========================================================
-# CLIQUES / REDIRECIONAMENTO AFILIADO
+# CLIQUES
 # =========================================================
 
 @app.route("/go/<int:pid>")
 def go(pid):
 
-    source = request.args.get(
-        "source",
-        "direct"
-    )
-
-    campaign = request.args.get(
-        "campaign",
-        ""
-    )
+    source = request.args.get("source", "direct")
+    campaign = request.args.get("campaign", "")
 
     con = db()
 
@@ -443,9 +436,7 @@ def go(pid):
         pid,
         source,
         campaign,
-        datetime.now().isoformat(
-            timespec="seconds"
-        )
+        datetime.now().isoformat(timespec="seconds")
     ))
 
     con.commit()
@@ -474,22 +465,18 @@ def sales():
             )
 
             amount = float(
-                request.form.get("amount")
-                or 0
+                request.form.get("amount") or 0
             )
 
             commission = float(
-                request.form.get("commission")
-                or 0
+                request.form.get("commission") or 0
             )
 
         except (ValueError, KeyError):
 
             con.close()
 
-            flash(
-                "Dados da venda inválidos."
-            )
+            flash("Dados da venda inválidos.")
 
             return redirect(
                 url_for("sales")
@@ -508,13 +495,8 @@ def sales():
             product_id,
             amount,
             commission,
-            request.form.get(
-                "source",
-                "manual"
-            ),
-            datetime.now().isoformat(
-                timespec="seconds"
-            )
+            request.form.get("source", "manual"),
+            datetime.now().isoformat(timespec="seconds")
         ))
 
         con.commit()
@@ -553,6 +535,162 @@ def sales():
 
 
 # =========================================================
+# WEBHOOK KIWIFY
+# =========================================================
+
+@app.post("/webhook/kiwify")
+def webhook_kiwify():
+
+    # Se você configurar um token no Railway,
+    # a URL deve conter ?token=SEU_TOKEN
+    if KIWIFY_WEBHOOK_TOKEN:
+        token_recebido = request.args.get("token", "")
+
+        if not secrets.compare_digest(
+            token_recebido,
+            KIWIFY_WEBHOOK_TOKEN
+        ):
+            return jsonify({
+                "ok": False,
+                "error": "unauthorized"
+            }), 401
+
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return jsonify({
+            "ok": False,
+            "error": "invalid_json"
+        }), 400
+
+    # Guarda campos comuns sem assumir um payload único.
+    event_id = str(
+        data.get("id")
+        or data.get("event_id")
+        or data.get("order_id")
+        or data.get("transaction_id")
+        or ""
+    )
+
+    event_type = str(
+        data.get("event")
+        or data.get("event_type")
+        or data.get("status")
+        or ""
+    ).strip().lower()
+
+    con = db()
+
+    # Evita processar duas vezes o mesmo evento.
+    if event_id:
+
+        existing = con.execute("""
+            SELECT id
+            FROM webhook_events
+            WHERE provider = ?
+              AND event_id = ?
+            LIMIT 1
+        """, (
+            "kiwify",
+            event_id
+        )).fetchone()
+
+        if existing:
+
+            con.close()
+
+            return jsonify({
+                "ok": True,
+                "duplicate": True
+            }), 200
+
+    con.execute("""
+        INSERT INTO webhook_events(
+            provider,
+            event_id,
+            event_type,
+            payload,
+            created_at
+        )
+        VALUES(?,?,?,?,?)
+    """, (
+        "kiwify",
+        event_id or None,
+        event_type,
+        json.dumps(
+            data,
+            ensure_ascii=False
+        ),
+        datetime.now().isoformat(
+            timespec="seconds"
+        )
+    ))
+
+    # Só registramos automaticamente como venda
+    # quando reconhecemos explicitamente um status aprovado.
+    approved_events = {
+        "approved",
+        "paid",
+        "purchase_approved",
+        "order_approved",
+        "compra_aprovada",
+        "venda_aprovada"
+    }
+
+    if event_type in approved_events:
+
+        # Nesta primeira versão vinculamos ao
+        # produto mais recente cadastrado.
+        product = con.execute("""
+            SELECT *
+            FROM products
+            ORDER BY id DESC
+            LIMIT 1
+        """).fetchone()
+
+        if product:
+
+            raw_amount = (
+                data.get("amount")
+                or data.get("price")
+                or data.get("value")
+                or 0
+            )
+
+            try:
+                amount = float(raw_amount)
+            except (TypeError, ValueError):
+                amount = 0
+
+            con.execute("""
+                INSERT INTO sales(
+                    product_id,
+                    amount,
+                    commission,
+                    source,
+                    created_at
+                )
+                VALUES(?,?,?,?,?)
+            """, (
+                product["id"],
+                amount,
+                product["commission"],
+                "kiwify-webhook",
+                datetime.now().isoformat(
+                    timespec="seconds"
+                )
+            ))
+
+    con.commit()
+    con.close()
+
+    return jsonify({
+        "ok": True,
+        "event_type": event_type
+    }), 200
+
+
+# =========================================================
 # IA
 # =========================================================
 
@@ -580,19 +718,10 @@ def ai():
 @login_required
 def ai_copy():
 
-    data = request.get_json(
-        force=True
-    )
+    data = request.get_json(force=True)
 
-    name = data.get(
-        "name",
-        "Produto"
-    )
-
-    niche = data.get(
-        "niche",
-        ""
-    )
+    name = data.get("name", "Produto")
+    niche = data.get("niche", "")
 
     headline = (
         f"Descubra uma forma mais simples "
