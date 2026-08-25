@@ -1,16 +1,21 @@
 
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash
-import sqlite3, os, secrets
+import sqlite3, os, secrets, logging
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from urllib.parse import urlparse
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
 DB = os.getenv("DB_PATH", os.path.join(os.path.dirname(__file__), "afiliado_ia.db"))
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "troque-esta-senha")
+
+_db_initialized = False
 
 def login_required(fn):
     @wraps(fn)
@@ -27,44 +32,58 @@ def db():
     return con
 
 def init_db():
-    con = db()
-    con.executescript("""
-    CREATE TABLE IF NOT EXISTS products(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        niche TEXT,
-        commission REAL DEFAULT 0,
-        affiliate_url TEXT NOT NULL,
-        status TEXT DEFAULT 'Ativo',
-        created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS leads(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        email TEXT,
-        whatsapp TEXT,
-        product_id INTEGER,
-        source TEXT,
-        created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS clicks(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        product_id INTEGER NOT NULL,
-        source TEXT,
-        campaign TEXT,
-        created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS sales(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        product_id INTEGER NOT NULL,
-        amount REAL DEFAULT 0,
-        commission REAL DEFAULT 0,
-        source TEXT,
-        created_at TEXT NOT NULL
-    );
-    """)
-    con.commit()
-    con.close()
+    global _db_initialized
+    logger.info("Initializing database at %s", DB)
+    try:
+        con = db()
+        con.executescript("""
+        CREATE TABLE IF NOT EXISTS products(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            niche TEXT,
+            commission REAL DEFAULT 0,
+            affiliate_url TEXT NOT NULL,
+            status TEXT DEFAULT 'Ativo',
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS leads(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            email TEXT,
+            whatsapp TEXT,
+            product_id INTEGER,
+            source TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS clicks(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            source TEXT,
+            campaign TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sales(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            amount REAL DEFAULT 0,
+            commission REAL DEFAULT 0,
+            source TEXT,
+            created_at TEXT NOT NULL
+        );
+        """)
+        con.commit()
+        con.close()
+        _db_initialized = True
+        logger.info("Database initialized successfully at %s", DB)
+    except Exception:
+        logger.exception("Failed to initialize database at %s", DB)
+        raise
+
+@app.before_request
+def ensure_db_initialized():
+    global _db_initialized
+    if not _db_initialized:
+        init_db()
 
 @app.context_processor
 def inject_now():
@@ -220,4 +239,11 @@ def settings():
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT",5000)), debug=True)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+else:
+    # When running under a WSGI server such as gunicorn, __main__ is never
+    # executed, so make sure the schema exists as soon as the module loads.
+    try:
+        init_db()
+    except Exception:
+        logger.exception("Database initialization failed during module import")
